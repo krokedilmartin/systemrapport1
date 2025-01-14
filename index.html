@@ -28,6 +28,24 @@
       color: blue;
       text-decoration: none;
     }
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #0073e6;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #005bb5;
+    }
   </style>
 </head>
 <body>
@@ -36,8 +54,12 @@
   
   <input type="file" id="fileInput" accept=".json">
   <div id="results" class="results"></div>
+  <button id="downloadButton" style="display: none;">Ladda ner systemrapport</button>
+  <pre id="formattedJson" style="display: none;"></pre>
 
   <script>
+    let jsonData = null;
+
     document.getElementById('fileInput').addEventListener('change', function(event) {
       const file = event.target.files[0];
 
@@ -46,8 +68,9 @@
 
         reader.onload = function(e) {
           try {
-            const jsonData = JSON.parse(e.target.result);
+            jsonData = JSON.parse(e.target.result);
             analyzeJsonReport(jsonData);
+            displayFormattedJson(jsonData);
           } catch (error) {
             document.getElementById('results').innerHTML = `<p class="error">Ogiltig JSON-fil: ${error.message}</p>`;
           }
@@ -79,6 +102,38 @@
         checks.push(`<p class="info">WordPress-version: ${wpVersion}.</p>`);
       } else {
         checks.push(`<p class="error">WordPress-version kunde inte hittas i JSON-rapporten.</p>`);
+      }
+
+      // WooCommerce-version
+      let wcVersion = data.environment && data.environment.version ? data.environment.version : "Okänd";
+      let wcLatestVersion = data.environment && data.environment.version_latest ? data.environment.version_latest : null;
+
+      if (!wcLatestVersion && data.active_plugins) {
+        const wooPlugin = data.active_plugins.find(plugin => plugin.name === "WooCommerce");
+        if (wooPlugin) {
+          wcLatestVersion = wooPlugin.version_latest;
+        }
+      }
+
+      if (wcVersion !== "Okänd") {
+        checks.push(`<p class="info">WooCommerce-version: ${wcVersion}.</p>`);
+        if (wcLatestVersion) {
+          if (wcVersion === wcLatestVersion) {
+            checks.push(`<p class="success">WooCommerce är uppdaterad till senaste version (${wcVersion}).</p>`);
+          } else {
+            checks.push(`<p class="error">WooCommerce är inte uppdaterad. Installerad version: ${wcVersion}, senaste version: ${wcLatestVersion}.</p>`);
+          }
+        } else {
+          checks.push(`<p class="error">Senaste WooCommerce-version kunde inte hittas.</p>`);
+        }
+      }
+
+      // PHP-version
+      if (data.environment && data.environment.php_version) {
+        const phpVersion = data.environment.php_version;
+        checks.push(`<p class="info">PHP-version: ${phpVersion}.</p>`);
+      } else {
+        checks.push(`<p class="error">PHP-version kunde inte hittas i JSON-rapporten.</p>`);
       }
 
       // Decimaler
@@ -119,17 +174,25 @@
         checks.push(`<p class="error">Ingen information om aktiva plugins hittades i JSON-rapporten.</p>`);
       }
 
-      // HPOS-status
-      if (data.settings) {
-        const hposEnabled = data.settings.HPOS_enabled ? "aktiverat" : "inte aktiverat";
-        const hposSyncEnabled = data.settings.HPOS_sync_enabled ? "aktiverad" : "inte aktiverad";
-        checks.push(`<p class="info">HPOS är ${hposEnabled}.</p>`);
-        checks.push(`<p class="info">HPOS-synkronisering är ${hposSyncEnabled}.</p>`);
-      } else {
-        checks.push(`<p class="error">Ingen information om HPOS-status hittades i JSON-rapporten.</p>`);
-      }
-
       resultsContainer.innerHTML = checks.join('');
+    }
+
+    function displayFormattedJson(data) {
+      const formattedJsonContainer = document.getElementById('formattedJson');
+      const downloadButton = document.getElementById('downloadButton');
+
+      formattedJsonContainer.textContent = JSON.stringify(data, null, 2);
+      formattedJsonContainer.style.display = 'block';
+
+      downloadButton.style.display = 'inline-block';
+      downloadButton.onclick = function () {
+        const fileName = (data.environment.home_url || 'systemrapport').replace(/https?:\/\//, '').replace(/[^\w\-]/g, '_') + '_systemrapport.json';
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+      };
     }
   </script>
 </body>
