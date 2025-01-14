@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WooCommerce Systemrapport Kontroll</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .results {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+    .error {
+      color: red;
+    }
+    .success {
+      color: green;
+    }
+    .info {
+      color: blue;
+    }
+    a {
+      color: blue;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>WooCommerce Systemrapport Kontroll</h1>
+  <p>Ladda upp en systemrapport (JSON) från WooCommerce.</p>
+  
+  <input type="file" id="fileInput" accept=".json">
+  <div id="results" class="results"></div>
+
+  <script>
+    document.getElementById('fileInput').addEventListener('change', function(event) {
+      const file = event.target.files[0];
+
+      if (file && file.name.endsWith('.json')) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+          try {
+            const jsonData = JSON.parse(e.target.result);
+            analyzeJsonReport(jsonData);
+          } catch (error) {
+            document.getElementById('results').innerHTML = `<p class="error">Ogiltig JSON-fil: ${error.message}</p>`;
+          }
+        };
+
+        reader.readAsText(file);
+      } else {
+        document.getElementById('results').innerHTML = `<p class="error">Endast JSON-filer stöds.</p>`;
+      }
+    });
+
+    function analyzeJsonReport(data) {
+      const resultsContainer = document.getElementById('results');
+      resultsContainer.innerHTML = ''; // Rensa tidigare resultat
+
+      const checks = [];
+
+      // Site URL
+      if (data.environment && data.environment.site_url) {
+        const siteUrl = data.environment.site_url;
+        checks.push(`<p class="info">Webbplats URL: <a href="${siteUrl}" target="_blank">${siteUrl}</a></p>`);
+      } else {
+        checks.push(`<p class="error">Webbplatsens URL kunde inte hittas i JSON-rapporten.</p>`);
+      }
+
+      // WordPress-version
+      if (data.environment && data.environment.wp_version) {
+        const wpVersion = data.environment.wp_version;
+        checks.push(`<p class="info">WordPress-version: ${wpVersion}.</p>`);
+      } else {
+        checks.push(`<p class="error">WordPress-version kunde inte hittas i JSON-rapporten.</p>`);
+      }
+
+      // Decimaler
+      if (data.settings && data.settings.number_of_decimals !== undefined) {
+        const decimals = data.settings.number_of_decimals;
+        if (decimals === 2) {
+          checks.push(`<p class="success">Antalet decimaler är korrekt inställt (${decimals}).</p>`);
+        } else {
+          checks.push(`<p class="error">Antalet decimaler är inställt på ${decimals}. Det bör vara 2.</p>`);
+        }
+      }
+
+      // Tema
+      if (data.theme) {
+        const themeName = data.theme.name || 'Okänt tema';
+        const themeVersion = data.theme.version || 'Okänd version';
+        const themeLatestVersion = data.theme.version_latest || 'Okänd senaste version';
+        checks.push(`<p class="info">Tema: ${themeName} (Version: ${themeVersion}).</p>`);
+        if (themeVersion === themeLatestVersion) {
+          checks.push(`<p class="success">Temat "${themeName}" är uppdaterat till senaste version (${themeVersion}).</p>`);
+        } else {
+          checks.push(`<p class="error">Temat "${themeName}" är inte uppdaterat. Installerad version: ${themeVersion}, senaste version: ${themeLatestVersion}.</p>`);
+        }
+      }
+
+      // Plugins
+      if (data.active_plugins && data.active_plugins.length > 0) {
+        checks.push("<p class='info'>Aktiva plugins:</p><ul>");
+        data.active_plugins.forEach(plugin => {
+          if (plugin.version === plugin.version_latest) {
+            checks.push(`<li class="success">${plugin.name} (Version: ${plugin.version}) är uppdaterad.</li>`);
+          } else {
+            checks.push(`<li class="error">${plugin.name} (Version: ${plugin.version}) är inte uppdaterad. Senaste versionen är ${plugin.version_latest}.</li>`);
+          }
+        });
+        checks.push("</ul>");
+      } else {
+        checks.push(`<p class="error">Ingen information om aktiva plugins hittades i JSON-rapporten.</p>`);
+      }
+
+      // HPOS-status
+      if (data.settings) {
+        const hposEnabled = data.settings.HPOS_enabled ? "aktiverat" : "inte aktiverat";
+        const hposSyncEnabled = data.settings.HPOS_sync_enabled ? "aktiverad" : "inte aktiverad";
+        checks.push(`<p class="info">HPOS är ${hposEnabled}.</p>`);
+        checks.push(`<p class="info">HPOS-synkronisering är ${hposSyncEnabled}.</p>`);
+      } else {
+        checks.push(`<p class="error">Ingen information om HPOS-status hittades i JSON-rapporten.</p>`);
+      }
+
+      resultsContainer.innerHTML = checks.join('');
+    }
+  </script>
+</body>
+</html>
